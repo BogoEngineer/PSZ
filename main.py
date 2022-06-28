@@ -33,4 +33,6 @@ if __name__ == '__main__':
 
     mu = ModelUtility(config)
 
+    mu.linear_regression()
+    # mu.k_nearest_neighbours()
 
