@@ -1,3 +1,4 @@
+import warnings
 import psycopg2
 import pandas as pd
 import numpy as np
@@ -26,13 +27,23 @@ def gradient_descent(x, y, theta, learning_rate=0.1, num_epochs=10):
     m = x.shape[0]
     J_all = []
 
+    J_trail = float('inf')
     for _ in range(num_epochs):
         h_x = h(x, theta)
 
         diff = h_x - y.to_frame()
         cost_ = (1 / m) * (x.T @ diff)  # dJ/dTheta
-        theta = theta - (learning_rate) * cost_
-        J_all.append(cost_function(x, y, theta)[0])
+        theta = theta - learning_rate * cost_
+        J_curr = cost_function(x, y, theta)[0]
+        J_all.append(J_curr)
+
+        if J_trail <= J_curr:
+            print("No improvements in cost function!!!")
+            break
+
+        print("Cost function is going down (Last iteration - This iteration): {} - {}".format(J_trail, J_curr))
+        J_trail = J_curr
+
 
     return theta, J_all
 
@@ -46,15 +57,17 @@ def plot_cost(J_all, num_epochs):
 
 def test_regression(theta, x_test, y_test):
     predictions = theta.T @ x_test.T
-    prediction_mean = predictions.mean(axis=1)
+    y_mean = y_test.mean()
     ssr = ((predictions-y_test)**2).to_numpy().sum()
-    sst = ((predictions.T-prediction_mean)**2).to_numpy().sum()
+    sst = ((y_test-y_mean)**2).to_numpy().sum()
 
     r2_manual = 1 - ssr/sst
     print("Estimated r2: ", r2_manual)
 
     r2 = r2_score(y_test, predictions.T)
     print("Real r2: ", r2)
+
+    return r2_manual
 
 def test_knn(prediction, real):
     counter = 0
@@ -77,7 +90,33 @@ def log_progress(index, length):
 
 class ModelUtility:
 
-    def __init__(self, config):
+    def prepareData(self, config, filter, parameters):  # constructor for only computing output of a single record
+        self.parameters = None
+        postgres_config = config['Postgres']
+        self.postgres_connection = psycopg2.connect(database=postgres_config['Database'],
+                                                    user=postgres_config['Username'],
+                                                    password=postgres_config['Password'],
+                                                    host=postgres_config['Host'],
+                                                    port=postgres_config['Port'])
+        self.postgres_cursor = self.postgres_connection.cursor()
+        self.file_names = config['FileNames']['DataVisualization'].split(',')
+
+        self.data_limit = config['Regression']['data_limit']
+        sql_query = '''SELECT * FROM car WHERE leasing = false AND loan = false LIMIT 1000'''  #  enough data to normalize
+        self.postgres_cursor.execute(sql_query)
+        self.data = pd.DataFrame(self.postgres_cursor.fetchall(), columns=config['Data']['Columns'].split(','))
+        self.filter_data(filter)
+        self.data.loc[len(self.data.index)] = parameters
+
+        self.encode_data(config['Data']['Encoding'].split(','))
+        self.normalize()
+
+    def __init__(self, config, just_predict=False, filter=[], parameters=[]):
+        if just_predict:
+            self.prepareData(config, filter, parameters)
+            return
+        self.config = config
+        warnings.simplefilter(action='ignore', category=FutureWarning)
         postgres_config = config['Postgres']
         self.postgres_connection = psycopg2.connect(database=postgres_config['Database'],
                                                     user=postgres_config['Username'],
@@ -95,7 +134,8 @@ class ModelUtility:
         # print(self.data[:10].to_string())
         # print("PRE CHANGE------------------------------------")
 
-        self.filter_data(config['Data']['Filter'].split(','))
+        self.filter = config['Data']['Filter'].split(',')
+        self.filter_data(self.filter)
 
         # print("FILTER------------------------------------")
         # print(self.data[:10].to_string())
@@ -123,7 +163,7 @@ class ModelUtility:
         for class_ in config['ClassificationClasses']:
             self.classes[class_] = [int(x) for x in config['ClassificationClasses'][class_].split('-')]
 
-        self.split = int(float(config['Regression']['split']) * self.data.__len__())
+        self.split = float(config['Regression']['split'])
         self.metrics = [x for x in config['ClassificationDistances'] if config['ClassificationDistances'][x] == 'True'][
             0]
 
@@ -131,13 +171,19 @@ class ModelUtility:
 
         self.theta = []
 
+        self.top_regression_model = config["TopRegressionModelMetadata"]
+
+
     def filter_data(self, needed):
         columns = list(set(needed) ^ set(self.data.columns))
         self.data.drop(columns, axis=1, inplace=True)
 
     def encode_data(self, columns):
-        self.data['seats'] = self.data['seats'].apply(lambda x: int(x[0]))
-        self.data['doors'] = self.data['doors'].apply(lambda x: int(x[0]))
+        if 'seats' in self.data:
+            self.data['seats'] = self.data['seats'].apply(lambda x: int(x[0]))
+
+        if 'doors' in self.data:
+            self.data['doors'] = self.data['doors'].apply(lambda x: int(x[0]))
 
         columns = list(set(columns) & set(self.data.columns))  # intersection - common columns
 
@@ -158,15 +204,8 @@ class ModelUtility:
                 self.data[column])) - 1  # 0 to 1
 
     def linear_regression(self):
-        # x_train = self.x[:self.split]
-        # y_train = self.y[:self.split]
-        # x_test = self.x[self.split:]
-        # y_test = self.y[self.split:]
-        # y = np.reshape(y.to_numpy(), (self.data['price'].count(), 1))
-        # x = np.hstack((np.ones((x.shape[0], 1)), x))
-
         x_train, x_test, y_train, y_test = train_test_split(
-            self.x, self.y, test_size=0.005, random_state=42)
+            self.x, self.y, test_size=self.split, random_state=42)
 
         x_train.columns = [''] * len(x_train.columns)
         x_test.columns = [''] * len(x_test.columns)
@@ -181,19 +220,38 @@ class ModelUtility:
         # for testing and plotting cost
         # plot_cost(J_all, [i for i in range(10)])
 
-        test_regression(self.theta, x_test, y_test)
+        r2_result = test_regression(self.theta, x_test, y_test)
+
+        if r2_result > float(self.top_regression_model['r2_result']):
+            self.save_regression_model(r2_result)
+
+    def save_regression_model(self, r2_result):
+
+        new_model = {}
+        for feature, parameter in zip(self.filter, self.theta['price'].to_list()):
+            new_model[feature] = parameter
+
+        new_model_metadata = {
+            'r2_result': r2_result,
+            'data': len(self.data),
+            'epochs': self.num_epochs,
+            'split': self.split,
+            'learning_rate': self.learning_rate
+        }
+
+        self.config['TopRegressionModelMetadata'] = new_model_metadata
+        self.config['TopRegressionModel'] = new_model
+
+        with open('config.ini', 'w') as configfile:
+            self.config.write(configfile)
+
+        print("New best model saved!")
 
     def k_nearest_neighbours(self):
         y = self.y.apply(lambda x: self.get_knn_class(x))
 
-        # x_train = self.x[:self.split]
-        # y_train = y[:self.split]
-        #
-        # x_test = self.x[self.split:]
-        # y_test = y[self.split:]
-
         x_train, x_test, y_train, y_test = train_test_split(
-            self.x, y, test_size=0.005, random_state=42)
+            self.x, y, test_size=self.split, random_state=42)
 
         predictions = np.array([])
         counter = 0
@@ -249,3 +307,12 @@ class ModelUtility:
             price_range = self.classes[class_]
             if price_range[0] <= price < price_range[1]:
                 return class_
+
+    def regression_predict(self, features):
+        return h(features, self.parameters)
+
+    def compute_regression_result(self, parameters):
+        features = [float(x) for x in self.data.iloc[-1]]
+        self.parameters = [float(x) for x in pd.Series(parameters)]
+
+        print("Estimated price for given features is: ", np.matmul(features, self.parameters))

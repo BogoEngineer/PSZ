@@ -10,70 +10,73 @@ from dataclasses import dataclass
 @dataclass(repr=True)
 class CarItem:
     # id : int
-    used : bool
-    make : str
-    model : str
-    year : str
-    mileage : str
-    body : str
-    fuel : str
-    capacity : str
-    horsepower : str
-    changeable_price : bool
-    trade : bool
-    dual_mass_flywheel : bool
-    motor_emission_class : str
-    drivetrain : str
-    automatic_transmission : bool
-    doors : str
-    seats : str
-    wheel_side_left : bool
-    air_condition : str
-    exterior_color : str
-    interior_color : str
-    interior_material : str
-    registered_until : str
-    is_registered : bool
-    origin : str
-    damaged : bool
-    country : str
-    leasing : bool
-    loan : bool
+    used: bool
+    make: str
+    model: str
+    year: str
+    mileage: int
+    body: str
+    fuel: str
+    capacity: int
+    horsepower: int
+    changeable_price: bool
+    trade: bool
+    dual_mass_flywheel: bool
+    motor_emission_class: str
+    drivetrain: str
+    automatic_transmission: bool
+    doors: str
+    seats: str
+    wheel_side_left: bool
+    air_condition: str
+    exterior_color: str
+    interior_color: str
+    interior_material: str
+    registered_until: str
+    is_registered: bool
+    origin: str
+    damaged: bool
+    country: str
+    leasing: bool
+    loan: bool
+    place: str
+    link: str
+    price: int
 
     def __init__(self, info):
-        # self.id = info['Broj oglasa:'] if info.get('Broj oglasa') is not None else ""
-        self.used = info['Stanje'] == "Polovno vozilo" if info.get('stanje') is not None else True
-        self.make = info['Marka'] if info.get('Marka') is not None else ""
-        self.model = info['Model'] if info.get('Model') is not None else ""
-        self.year = info['Godište'] if info.get('Godište') is not None else ""
-        self.mileage = info['Kilometraža'] if info.get('Kilometraža') is not None else ""
-        self.body = info['Karoserija'] if info.get('Karoserija') is not None else ""
-        self.fuel = info['Gorivo'] if info.get('Gorivo') is not None else ""
-        self.capacity = info['Kubikaža'] if info.get('Kubikaža') is not None else ""
-        self.horsepower = info['Snaga motora'] if info.get('Snaga motora') is not None else ""
-        self.changeable_price = info['Fiksna cena'] != "DA" if info.get('Fiksna cena') is not None else True
-        self.trade = info['Zamena'] != "NE" if info.get('Zamena') is not None else True
-        self.dual_mass_flywheel = info['Plivajući zamajac'] == "Sa plivajućim zamajcem " if info.get('Plivajući zamajac') is not None else False
-        self.motor_emission_class = info['Emisiona klasa motora'] if info.get(
-            'Emisiona klasa motora') is not None else ""
-        self.drivetrain = info['Pogon'] if info.get('Pogon') is not None else ""
-        self.automatic_transmission = info['Menjač'] == "Automatski / poluautomatski " if info.get(
-            'Menjač') is not None else False
-        self.doors = info['Broj vrata'] if info.get('Broj vrata') is not None else ""
-        self.seats = info['Broj sedišta'] if info.get('Broj sedišta') is not None else ""
-        self.wheel_side_left = info['Strana volana'] == "Levi volan " if info.get('Strana volana') is not None else True
-        self.air_condition = info['Klima'] if info.get('Klima') is not None else ""
-        self.exterior_color = info['Boja'] if info.get('Boja') is not None else ""
-        self.interior_color = info['Boja enterijera'] if info.get('Boja enterijera') is not None else ""
-        self.interior_material = info['Materijal enterijera'] if info.get('Materijal enterijera') is not None else ""
-        self.registered_until = info['Registrovan do'] if info.get('Registrovan do') is not None else ""
-        self.is_registered = info['Registrovan do'] != "Nije registrovan " if info.get(
-            'Registrovan do') is not None else False
-        self.origin = info['Poreklo vozila'] if info.get('Poreklo vozila') is not None else ""
-        self.damaged = info['Oštećenje'] != "Nije oštećen " if info.get('Oštećenje') is not None else True
-        self.country = info['Zemlja uvoza'] if info.get('Zemlja uvoza') is not None else "?"
-        self.loan = info['Lizing'] == "DA" if info.get('Lizing') is not None else False
-        self.leasing = info['Kredit'] == "DA" if info.get('Kredit') is not None else False
+        # self.id = info.get("Broj oglasa:", "?")
+        self.used = info.get("Stanje", "Polovno vozilo") == "Polovno vozilo"
+        self.make = info.get("Marka", "?")
+        self.model = info.get("Model", "?")
+        self.year = info.get("Godište", "?")
+        self.mileage = int(info.get("Kilometraža", "?").replace(" km", "").replace(".", ""))
+        self.body = info.get("Karoserija", "?")
+        self.fuel = info.get("Gorivo", "?")
+        self.capacity = int(info.get("Kubikaža", "?").replace(" cm3", ""))
+        self.horsepower = int(info.get("Snaga motora", "?").split("/")[1].replace(" (kW", ""))
+        self.changeable_price = info.get("Fiksna cena", "NE") != "DA"
+        self.trade = info.get("Zamena", "DA") != "NE"
+        self.dual_mass_flywheel = info.get("Plivajući zamajac", "?") == "Sa plivajućim zamajcem "
+        self.motor_emission_class = info.get("Emisiona klasa motora", "?")
+        self.drivetrain = info.get("Pogon", "?")
+        self.automatic_transmission = info.get("Menjač", "?") == "Automatski / poluautomatski "
+        self.doors = info.get("Broj vrata", "?")
+        self.seats = info.get("Broj sedišta", "?")
+        self.wheel_side_left = info.get("Strana volana", "Levi volan ") == "Levi volan "
+        self.air_condition = info.get("Klima", "?")
+        self.exterior_color = info.get("Boja", "?")
+        self.interior_color = info.get("Boja enterijera", "?")
+        self.interior_material = info.get("Materijal enterijera", "?")
+        self.registered_until = info.get("Registrovan do", "?")
+        self.is_registered = info.get("Registrovan do", "Nije registrovan ") != "Nije registrovan "
+        self.origin = info.get("Poreklo vozila", "?")
+        self.damaged = info.get("Oštećenje", "?") != "Nije oštećen "
+        self.country = info.get("Zemlja uvoza", "?")
+        self.loan = info.get("Lizing", "?") == "DA"
+        self.leasing = info.get("Kredit", "?") == "DA"
+        self.place = info.get("Grad", "?")
+        self.link = info.get("Link", "?")
+        self.price = info.get("Cena", -1)
 
     def __str__(self):
         key_value = dataclasses.asdict(self)
@@ -84,7 +87,7 @@ class CarItem:
         for value in values:
             return_str += str(value)
 
-        return_str = return_str.replace('[', '')
-        return_str = return_str.replace(']', '')
+        return_str = return_str.replace("[", "")
+        return_str = return_str.replace("]", "")
 
         return return_str[11:]
